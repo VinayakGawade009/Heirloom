@@ -142,6 +142,7 @@ def generate(
     model: str = DEFAULT_MODEL,
     system: str = "",
     images: Sequence[Any] | None = None,
+    format: str | Mapping[str, Any] | None = None,
     options: Mapping[str, Any] | None = None,
     client: ollama.Client | None = None,
     host: str | None = None,
@@ -155,6 +156,7 @@ def generate(
         model: Target model name (default: gemma4:e2b).
         system: Optional system prompt.
         images: Optional sequence of image file paths or bytes.
+        format: Optional output format (e.g. 'json').
         options: Optional mapping of options overriding defaults.
         client: Optional pre-configured ollama.Client.
         host: Optional Ollama host URL.
@@ -169,15 +171,19 @@ def generate(
     if options:
         merged_options.update(options)
 
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "prompt": prompt,
+        "system": system,
+        "images": images,
+        "options": merged_options,
+    }
+    if format:
+        kwargs["format"] = format
+
     c = client or get_client(host=host, timeout=timeout)
     with handle_ollama_errors(model=model):
-        response = c.generate(
-            model=model,
-            prompt=prompt,
-            system=system,
-            images=images,
-            options=merged_options,
-        )
+        response = c.generate(**kwargs)
         output = getattr(response, "response", None)
         if output is None and isinstance(response, dict):
             output = response.get("response")
@@ -193,6 +199,7 @@ def generate(
 def chat(
     messages: Sequence[Mapping[str, Any]],
     model: str = DEFAULT_MODEL,
+    format: str | Mapping[str, Any] | None = None,
     options: Mapping[str, Any] | None = None,
     client: ollama.Client | None = None,
     host: str | None = None,
@@ -204,6 +211,7 @@ def chat(
     Args:
         messages: Sequence of message dicts (e.g. [{"role": "user", "content": "..."}]).
         model: Target model name (default: gemma4:e2b).
+        format: Optional output format (e.g. 'json').
         options: Optional mapping of options overriding defaults.
         client: Optional pre-configured ollama.Client.
         host: Optional Ollama host URL.
@@ -218,13 +226,17 @@ def chat(
     if options:
         merged_options.update(options)
 
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "options": merged_options,
+    }
+    if format:
+        kwargs["format"] = format
+
     c = client or get_client(host=host, timeout=timeout)
     with handle_ollama_errors(model=model):
-        response = c.chat(
-            model=model,
-            messages=messages,
-            options=merged_options,
-        )
+        response = c.chat(**kwargs)
         msg = getattr(response, "message", None)
         content = getattr(msg, "content", None) if msg else None
         if content is None and isinstance(response, dict):
