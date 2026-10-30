@@ -20,6 +20,96 @@ def _clean_strays(text: str) -> str:
     return text.replace("[?", "").replace("?]", "")
 
 
+def is_digit_or_mult_line(line: str) -> bool:
+    """Check if a line consists only of digits, whitespace, 'x', 'X', or multiplication signs."""
+    allowed_symbols = {"x", "X", "×", "\u00d7", "✕", "✖", "*"}
+    return all(c.isdigit() or c.isspace() or c in allowed_symbols for c in line)
+
+
+def is_letter_line(line: str) -> bool:
+    """Check if a line contains real letters (excluding lines made only of digits, spaces, and x/multiplication)."""
+    if is_digit_or_mult_line(line):
+        return False
+    return any(c.isalpha() for c in line)
+
+
+def collapse_repeated_lines(lines: list[str]) -> list[str]:
+    """Remove runs of 3 or more identical (or near-identical, ignoring whitespace) consecutive lines, keeping the first one."""
+    if not lines:
+        return []
+
+    result: list[str] = []
+    i = 0
+    n = len(lines)
+
+    while i < n:
+        curr_norm = "".join(lines[i].split())
+        j = i + 1
+        while j < n and "".join(lines[j].split()) == curr_norm:
+            j += 1
+
+        run_len = j - i
+        if run_len >= 3:
+            # Keep only the first line of the run
+            result.append(lines[i])
+        else:
+            # Keep all lines if fewer than 3
+            result.extend(lines[i:j])
+
+        i = j
+
+    return result
+
+
+def drop_trailing_digit_lines(lines: list[str]) -> list[str]:
+    """Drop trailing lines made only of digits, spaces, and x/multiplication signs when coming after the last line containing letters."""
+    last_letter_idx = -1
+    for i in range(len(lines) - 1, -1, -1):
+        if is_letter_line(lines[i]):
+            last_letter_idx = i
+            break
+
+    if last_letter_idx == -1:
+        return lines
+
+    trimmed = list(lines)
+    while len(trimmed) > last_letter_idx + 1:
+        if is_digit_or_mult_line(trimmed[-1]):
+            trimmed.pop()
+        else:
+            break
+
+    return trimmed
+
+
+def trim_repetition(text: str) -> str:
+    """
+    Remove repetitive looping and trailing garbage from model output.
+
+    - Removes runs of 3 or more identical (or near-identical, ignoring whitespace)
+      consecutive lines, keeping the first one.
+    - Drops trailing lines made only of digits, spaces, and the symbol 'x' or
+      the multiplication sign when they come after the last line containing letters.
+
+    Args:
+        text: Raw transcription output from the model.
+
+    Returns:
+        Cleaned text string.
+    """
+    if not text:
+        return ""
+
+    lines = text.splitlines()
+    if not lines:
+        return ""
+
+    lines = collapse_repeated_lines(lines)
+    lines = drop_trailing_digit_lines(lines)
+
+    return "\n".join(lines)
+
+
 def parse_uncertain(marked: str) -> tuple[str, list[dict[str, int]]]:
     """
     Parse uncertain markers [?word?] from transcription output.

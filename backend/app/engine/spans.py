@@ -78,6 +78,95 @@ def find_spans(text: str, value: str) -> list[Span]:
     return spans
 
 
+def is_valid_fact_text(val: str) -> bool:
+    """
+    Check if a fact's text value passes filtering rules.
+
+    Rules:
+    - Drop any value shorter than 2 characters.
+    - Drop any value that contains no letters and no digits.
+    - Drop any value that is digits only (any script, including Devanagari)
+      and shorter than 4 characters.
+    """
+    v = val.strip()
+    if len(v) < 2:
+        return False
+    if not any(c.isalpha() or c.isdigit() for c in v):
+        return False
+    no_ws = "".join(v.split())
+    if all(c.isdigit() for c in no_ws) and len(no_ws) < 4:
+        return False
+    return True
+
+
+def clean_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Filter and clean a list of facts:
+
+    1. Drop values that are digits only (< 4 chars) or shorter than 2 chars.
+    2. Drop values with no letters and no digits.
+    3. Remove overlaps: when two facts overlap or one is inside another,
+       keep the longer one and drop the shorter. Ties keep the earlier one.
+    4. Cap each distinct value at 5 occurrences (keep the first 5).
+    5. Return the final list sorted by start position.
+    """
+    if not facts:
+        return []
+
+    # 1 & 2. Filter out invalid values
+    valid: list[dict[str, Any]] = []
+    for f in facts:
+        text_val = f.get("text", "")
+        start = f.get("start", 0)
+        end = f.get("end", 0)
+        if not isinstance(text_val, str) or start < 0 or end <= start:
+            continue
+        if is_valid_fact_text(text_val):
+            valid.append(dict(f))
+
+    if not valid:
+        return []
+
+    # 3. Remove overlaps: keep longer, ties keep earlier
+    indexed_candidates = list(enumerate(valid))
+    indexed_candidates.sort(
+        key=lambda item: (
+            -(item[1]["end"] - item[1]["start"]),
+            item[1]["start"],
+            item[0],
+        )
+    )
+
+    accepted: list[dict[str, Any]] = []
+    for _, candidate in indexed_candidates:
+        c_start = candidate["start"]
+        c_end = candidate["end"]
+        overlaps = False
+        for acc in accepted:
+            a_start = acc["start"]
+            a_end = acc["end"]
+            if max(c_start, a_start) < min(c_end, a_end):
+                overlaps = True
+                break
+        if not overlaps:
+            accepted.append(candidate)
+
+    # Sort final accepted by start position
+    accepted.sort(key=lambda f: (f["start"], f["end"]))
+
+    # 4. Cap each distinct value at 5 occurrences (keep the first 5)
+    final_facts: list[dict[str, Any]] = []
+    counts: dict[str, int] = {}
+    for f in accepted:
+        key = f["text"].strip().lower()
+        cnt = counts.get(key, 0)
+        if cnt < 5:
+            counts[key] = cnt + 1
+            final_facts.append(f)
+
+    return final_facts
+
+
 def json_to_facts(data: dict[str, Any], text: str) -> list[dict[str, Any]]:
     """
     Convert model extraction JSON to a list of fact dictionaries with character spans.
@@ -87,7 +176,7 @@ def json_to_facts(data: dict[str, Any], text: str) -> list[dict[str, Any]]:
         text: Original text to locate character spans within.
 
     Returns:
-        List of facts: [{"kind": str, "text": str, "start": int, "end": int}]
+        Cleaned, non-overlapping list of facts sorted by start position.
     """
     if not text or not data or not isinstance(data, dict):
         return []
@@ -121,7 +210,7 @@ def json_to_facts(data: dict[str, Any], text: str) -> list[dict[str, Any]]:
             if not isinstance(item, str):
                 continue
             val = item.strip()
-            if not val or val.lower() in seen_vals:
+            if not val or not is_valid_fact_text(val) or val.lower() in seen_vals:
                 continue
             seen_vals.add(val.lower())
 
@@ -140,6 +229,5 @@ def json_to_facts(data: dict[str, Any], text: str) -> list[dict[str, Any]]:
                         "end": end,
                     })
 
-    # Sort facts deterministically by start position, then end position
-    facts.sort(key=lambda f: (f["start"], f["end"], f["kind"]))
-    return facts
+    # Apply cleaning (overlap removal, capping at 5 occurrences, sorting)
+    return clean_facts(facts)

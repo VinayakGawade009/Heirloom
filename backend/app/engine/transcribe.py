@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from .client import chat
 from .errors import EngineError, MODEL_FAILED
 from .image import prepare_image
-from .parsing import parse_uncertain
+from .parsing import parse_uncertain, trim_repetition
 from .prompts import build_transcribe_prompt
 
 
@@ -16,6 +16,7 @@ def transcribe(
     image_path: str | Path,
     model: str,
     language_hint: str | None = None,
+    options: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Transcribe a handwritten page image using the specified model.
@@ -24,6 +25,7 @@ def transcribe(
         image_path: Path to the image file.
         model: Ollama model tag (e.g. 'gemma4:e2b').
         language_hint: Optional language name (e.g. 'English', 'French').
+        options: Optional Ollama options override.
 
     Returns:
         dict with:
@@ -45,8 +47,16 @@ def transcribe(
         }
     ]
 
-    response_text = chat(messages=messages, model=model)
-    clean_text, spans = parse_uncertain(response_text)
+    transcribe_options: dict[str, Any] = {
+        "num_predict": 1500,
+        "repeat_penalty": 1.1,
+    }
+    if options:
+        transcribe_options.update(options)
+
+    response_text = chat(messages=messages, model=model, options=transcribe_options)
+    trimmed_text = trim_repetition(response_text)
+    clean_text, spans = parse_uncertain(trimmed_text)
 
     if not clean_text or not clean_text.strip():
         raise EngineError(MODEL_FAILED, "The model returned no text for this page")

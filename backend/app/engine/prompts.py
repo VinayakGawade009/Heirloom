@@ -57,11 +57,17 @@ def build_translate_prompt(text: str, target_language: str) -> str:
 
 
 EXTRACT_PROMPT = (
-    "List the people, places, dates and items mentioned in the text.\n"
-    'Return JSON only in the form {"people": [...], "places": [...], "dates": [...], "items": [...]}.\n'
+    "Extract only specific named things from the text:\n"
+    '- people: names or named relatives (such as "my brother Ravi")\n'
+    "- places: named towns, countries, buildings\n"
+    "- dates: a day, month, or year\n"
+    "- items: specific valuable or sentimental objects\n\n"
+    "Rules:\n"
+    "- Do NOT extract ordinary common nouns, adjectives, abstract ideas, or body parts.\n"
+    "- If nothing qualifies in a category, return an empty list for it.\n"
+    "- If the text has no names, places, or dates at all, return all four lists empty.\n"
     "- Copy each value exactly as it appears in the text.\n"
-    "- Do not invent anything.\n"
-    "- Do not give character positions."
+    '- Return JSON only in the form {"people": [], "places": [], "dates": [], "items": []}.'
 )
 
 
