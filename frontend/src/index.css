@@ -17,4 +17,16 @@
     margin: 0;
     padding: 0;
   }
+
+  /* Keyboard and focus: every button, link, input and dropdown shows a 2px marigold focus outline with a 2px offset */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #E9951C !important;
+    outline-offset: 2px !important;
+  }
 }

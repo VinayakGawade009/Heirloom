@@ -8,6 +8,7 @@ export interface TranscriptTextProps {
   /** Highlight a specific span (from facts "Show in transcript") */
   highlightSpan?: { start: number; end: number } | null;
   highlightRef?: React.RefObject<HTMLSpanElement | null>;
+  onClearHighlight?: () => void;
 }
 
 interface Segment {
@@ -83,12 +84,14 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
   onPageUpdated,
   highlightSpan,
   highlightRef,
+  onClearHighlight,
 }) => {
   const [activePopover, setActivePopover] = useState<{
     start: number;
     end: number;
     word: string;
     rect: DOMRect;
+    containerRect: DOMRect;
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +106,8 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
     (e: React.MouseEvent<HTMLButtonElement>, start: number, end: number) => {
       const word = text.slice(start, end);
       const rect = e.currentTarget.getBoundingClientRect();
-      setActivePopover({ start, end, word, rect });
+      const containerRect = containerRef.current?.getBoundingClientRect() || rect;
+      setActivePopover({ start, end, word, rect, containerRect });
     },
     [text]
   );
@@ -128,10 +132,16 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
     );
   }
 
-  const containerRect = containerRef.current?.getBoundingClientRect();
-
   return (
-    <div ref={containerRef} className="relative">
+    <div
+      ref={containerRef}
+      className="relative"
+      onClick={() => {
+        if (highlightSpan && onClearHighlight) {
+          onClearHighlight();
+        }
+      }}
+    >
       <div className="font-serif text-transcript leading-[1.7] text-ink whitespace-pre-wrap break-words">
         {segments.map((seg) => {
           // Check if this segment overlaps with highlightSpan
@@ -217,14 +227,14 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
       </div>
 
       {/* Popover */}
-      {activePopover && containerRect && (
+      {activePopover && (
         <CorrectionPopover
           pageId={page.id}
           word={activePopover.word}
           start={activePopover.start}
           end={activePopover.end}
           anchorRect={activePopover.rect}
-          containerRect={containerRect}
+          containerRect={activePopover.containerRect}
           onSaved={handleSaved}
           onClose={handleClosePopover}
         />

@@ -81,7 +81,7 @@ export const ImageStage: React.FC<ImageStageProps> = ({ imageUrl, title }) => {
     }
   }, [dragging, handleMouseMove, handleMouseUp]);
 
-  // Reset pan when zoom goes to 100 or below
+  // Reset pan when zoom returns to 100 or below
   useEffect(() => {
     if (zoom <= 100) {
       setPanX(0);
@@ -99,31 +99,37 @@ export const ImageStage: React.FC<ImageStageProps> = ({ imageUrl, title }) => {
 
       <div
         ref={containerRef}
-        className={`relative mx-4 mb-3 overflow-hidden rounded-sm border border-rule bg-inset flex items-center justify-center ${
+        className={`relative mx-4 mb-3 overflow-hidden rounded-sm border border-rule bg-inset flex items-center justify-center select-none ${
           canPan ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : ''
         }`}
-        style={{ minHeight: '320px' }}
+        style={{ minHeight: '340px', height: '400px' }}
         onMouseDown={handleMouseDown}
       >
-        {hasImage ? (
-          <img
-            src={imageUrl}
-            alt={title}
-            draggable={false}
-            className="select-none"
-            style={{
-              transform: `scale(${zoom / 100}) translate(${panX / (zoom / 100)}px, ${panY / (zoom / 100)}px)`,
-              transformOrigin: 'center center',
-              maxWidth: '100%',
-              maxHeight: '500px',
-              objectFit: 'contain',
-            }}
-          />
-        ) : (
-          <div className="w-full max-w-[280px] p-6">
-            <PaperThumb />
-          </div>
-        )}
+        <div
+          style={{
+            transform: `translate(${panX}px, ${panY}px) scale(${zoom / 100})`,
+            transformOrigin: 'center center',
+            transition: dragging ? 'none' : 'transform 0.1s ease-out',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            maxWidth: '100%',
+            maxHeight: '100%',
+          }}
+        >
+          {hasImage ? (
+            <img
+              src={imageUrl}
+              alt={title}
+              draggable={false}
+              className="select-none max-w-full max-h-[380px] object-contain pointer-events-none"
+            />
+          ) : (
+            <div className="w-[240px] p-2 pointer-events-none">
+              <PaperThumb />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Zoom controls */}

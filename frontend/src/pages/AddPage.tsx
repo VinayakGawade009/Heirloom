@@ -384,7 +384,11 @@ export default function AddPage() {
       {!createdPageId && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           {/* File input (hidden) */}
+          <label htmlFor="file-upload" className="sr-only">
+            Upload page photo
+          </label>
           <input
+            id="file-upload"
             type="file"
             ref={fileInputRef}
             onChange={handleFileInputChange}

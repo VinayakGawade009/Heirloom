@@ -71,17 +71,20 @@ export function TopBar() {
       </Link>
 
       <div className="relative flex-1 max-w-[580px]">
+        <label htmlFor="archive-search" className="sr-only">
+          Search your archive
+        </label>
         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none flex items-center justify-center">
           <SearchIcon width={17} height={17} />
         </span>
         <input
+          id="archive-search"
           type="text"
           value={searchTerm}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="Search your archive, e.g. which letters mention the farm?"
-          aria-label="Search your archive"
-          className="w-full pl-10 pr-10 py-2 font-sans text-[15px] text-ink bg-panel border border-rule rounded-btn placeholder:text-muted/70 focus:outline-none focus:border-marigold focus:ring-2 focus:ring-marigold/30"
+          className="w-full pl-10 pr-10 py-2 font-sans text-[15px] text-ink bg-panel border border-rule rounded-btn placeholder:text-muted/70 focus:outline-none"
         />
         {searchTerm && (
           <button

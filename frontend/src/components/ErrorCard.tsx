@@ -8,6 +8,8 @@ export interface ErrorCardProps {
   code?: ErrorCode | string | null;
   message?: string;
   onRetry?: () => void;
+  retryText?: string;
+  modelName?: string;
   className?: string;
 }
 
@@ -15,17 +17,19 @@ export const ErrorCard: React.FC<ErrorCardProps> = ({
   code,
   message,
   onRetry,
+  retryText = 'Try again',
+  modelName: modelNameProp,
   className = '',
 }) => {
   const { settings } = useSettings();
   const [copied, setCopied] = useState(false);
 
   const displayMessage = message || errorMessage(code);
-  const modelName = settings?.model || 'gemma4:e2b';
+  const activeModel = modelNameProp || settings?.model || 'gemma4:e2b';
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(`ollama pull ${modelName}`);
+      await navigator.clipboard.writeText(`ollama pull ${activeModel}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -50,7 +54,7 @@ export const ErrorCard: React.FC<ErrorCardProps> = ({
       {code === 'model_not_installed' && (
         <div className="bg-[#231C16] rounded-md px-4 py-3 flex items-center justify-between gap-3 text-white">
           <code className="font-mono text-[14px] text-[#F8F2E6] select-all">
-            ollama pull {modelName}
+            ollama pull {activeModel}
           </code>
           <button
             type="button"
@@ -80,7 +84,7 @@ export const ErrorCard: React.FC<ErrorCardProps> = ({
             onClick={onRetry}
             className="inline-flex items-center justify-center border border-danger text-danger hover:bg-danger/10 font-sans text-sm font-semibold px-4 py-2 rounded-btn transition-colors cursor-pointer"
           >
-            Try again
+            {retryText}
           </button>
         </div>
       )}

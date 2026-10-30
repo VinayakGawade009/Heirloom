@@ -121,6 +121,15 @@ export default function PageView() {
   // Highlight span for facts -> transcript cross-referencing
   const [highlightSpan, setHighlightSpan] = useState<{ start: number; end: number } | null>(null);
   const highlightRef = useRef<HTMLSpanElement | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearHighlight = useCallback(() => {
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+    setHighlightSpan(null);
+  }, []);
 
   // Initialize correction count in localStorage on first load
   const initializedRef = useRef(false);
@@ -140,10 +149,11 @@ export default function PageView() {
   const isStale = savedCount !== null && currentCount > savedCount;
   const staleCount = isStale ? currentCount - (savedCount ?? 0) : 0;
 
-  // Clean up refresh polling on unmount
+  // Clean up polling and highlight timer on unmount
   useEffect(() => {
     return () => {
       if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     };
   }, []);
 
@@ -200,30 +210,41 @@ export default function PageView() {
   );
 
   const handleShowInTranscript = useCallback((start: number, end: number) => {
+    // Clear any previous timer and highlight only this fact
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
     setHighlightSpan({ start, end });
     setActiveTab('transcript');
     // Scroll to highlighted span after tab switch
     setTimeout(() => {
       highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
+
+    // Auto-clear highlight after about 3 seconds
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightSpan(null);
+      highlightTimeoutRef.current = null;
+    }, 3000);
   }, []);
 
   // Clear highlight when switching tabs or pressing Escape
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setHighlightSpan(null);
+        clearHighlight();
       }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, []);
+  }, [clearHighlight]);
 
   // --- Render states ---
   if (isNaN(numericId)) {
     return (
-      <div className="flex flex-col gap-6 py-4">
-        <ErrorCard code="unknown" message="Invalid page ID." />
+      <div className="flex flex-col gap-6 py-4 max-w-2xl mx-auto">
+        <ErrorCard code="unknown" message="Page not found." />
         <Link to="/" className="text-sm font-medium text-muted hover:text-ink transition-colors">
           ← Back to library
         </Link>
@@ -243,9 +264,14 @@ export default function PageView() {
   }
 
   if (error && !page) {
+    const isNotFound = error.message.toLowerCase().includes('not found') || error.code === 'unknown';
     return (
-      <div className="flex flex-col gap-6 py-4">
-        <ErrorCard code={error.code} message={error.message} onRetry={reload} />
+      <div className="flex flex-col gap-6 py-4 max-w-2xl mx-auto">
+        <ErrorCard
+          code={error.code}
+          message={isNotFound ? 'Page not found.' : error.message}
+          onRetry={reload}
+        />
         <Link to="/" className="text-sm font-medium text-muted hover:text-ink transition-colors">
           ← Back to library
         </Link>
@@ -325,7 +351,7 @@ export default function PageView() {
           <div className="w-full lg:w-[60%] flex flex-col">
             <div className="bg-panel border border-rule rounded-panel flex flex-col">
               {/* Tab bar */}
-              <div className="flex items-center border-b border-rule px-5 gap-0 overflow-x-auto">
+              <div className="flex items-center border-b border-rule px-5 gap-0 overflow-visible">
                 {tabItems.map((tab) => {
                   const isActive = activeTab === tab.id;
                   return (
@@ -335,7 +361,7 @@ export default function PageView() {
                       onClick={() => {
                         setActiveTab(tab.id);
                         if (tab.id !== 'transcript') {
-                          setHighlightSpan(null);
+                          clearHighlight();
                         }
                       }}
                       className={`inline-flex items-center gap-1.5 px-4 py-3 font-sans text-sm font-medium cursor-pointer transition-colors whitespace-nowrap border-b-2 -mb-px ${
@@ -378,6 +404,7 @@ export default function PageView() {
                     onPageUpdated={handlePageUpdated}
                     highlightSpan={highlightSpan}
                     highlightRef={highlightRef}
+                    onClearHighlight={clearHighlight}
                   />
                 )}
 

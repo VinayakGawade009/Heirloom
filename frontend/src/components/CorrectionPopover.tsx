@@ -118,10 +118,11 @@ export const CorrectionPopover: React.FC<CorrectionPopoverProps> = ({
         width: `${popoverWidth}px`,
       }}
     >
-      <label className="font-sans text-sm font-semibold text-ink">
+      <label htmlFor="correction-input" className="font-sans text-sm font-semibold text-ink">
         What does the page say?
       </label>
       <input
+        id="correction-input"
         ref={inputRef}
         type="text"
         value={text}
