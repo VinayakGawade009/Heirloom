@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heirloom - Add page</title>
+<style>
+:root {
+  --bg: #FBF6EC;
+  --surface: #FFFDF8;
+  --surface-muted: #F5EEDB;
+  --border: #E6DAC3;
+  --border-strong: #D5C5A8;
+  --ink: #2B2118;
+  --ink-muted: #7A6C58;
+  --ink-subtle: #9E8E76;
+  --accent: #E9951C;
+  --accent-tint: #FDF1D8;
+  --accent-dark: #C67808;
+  --success: #4F7A3A;
+  --success-tint: #EAF4E3;
+  --error: #B23A2B;
+  --error-bg: #FDF0ED;
+  --font-serif: "Georgia", "Iowan Old Style", "Apple Garamond", "Baskerville", "Times New Roman", serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Consolas", "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Shared Top Bar */
+.topbar {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.topbar-center {
+  flex: 1;
+  max-width: 580px;
+}
+
+.search-wrap {
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 9px 18px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+}
+
+.search-input::placeholder {
+  color: var(--ink-subtle);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.btn-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--accent);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  border: 1px solid var(--accent-dark);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-add:hover {
+  background-color: #DE8B14;
+}
+
+.nav-link {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 10px;
+}
+
+.nav-link:hover {
+  color: var(--accent-dark);
+}
+
+/* Page Layout */
+.main-content {
+  flex: 1;
+  padding: 40px 32px 64px;
+  display: flex;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Header Area */
+.page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.breadcrumb {
+  font-size: 14px;
+  color: var(--ink-muted);
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: 2px;
+}
+
+.breadcrumb:hover {
+  color: var(--ink);
+}
+
+.page-title {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: -0.3px;
+}
+
+.page-subtitle {
+  font-size: 15px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+/* Cards General */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+/* Drop Area */
+.drop-area {
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 40px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* CSS-drawn Paper Sheet */
+.paper-sheet {
+  width: 52px;
+  height: 68px;
+  background: #FFFDF8;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  position: relative;
+  box-shadow: 1px 1px 0 rgba(43, 33, 24, 0.04);
+  padding: 10px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.paper-sheet::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  background: #F3EBD9;
+  border-bottom: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border-strong);
+  border-bottom-left-radius: 2px;
+}
+
+.paper-line {
+  height: 2px;
+  background: #E6DAC3;
+  border-radius: 1px;
+}
+
+.paper-line:nth-child(1) { width: 65%; }
+.paper-line:nth-child(2) { width: 85%; }
+.paper-line:nth-child(3) { width: 75%; }
+.paper-line:nth-child(4) { width: 50%; }
+
+.drop-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.drop-muted {
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.btn-choose {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 7px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.btn-choose:hover {
+  background: var(--surface-muted);
+}
+
+/* Fields Card */
+.fields-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.card-title {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.form-input {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+}
+
+.form-input::placeholder {
+  color: var(--ink-subtle);
+}
+
+/* Action Buttons Row */
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.btn-submit {
+  background-color: var(--accent);
+  color: var(--ink);
+  border: 1px solid var(--accent-dark);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-submit:hover {
+  background-color: #DE8B14;
+}
+
+.cancel-link {
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cancel-link:hover {
+  color: var(--ink);
+}
+
+/* Progress Card */
+.progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.steps-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+.step-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-header {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.step-done {
+  color: var(--success);
+}
+
+.step-active {
+  color: var(--accent-dark);
+}
+
+.step-waiting {
+  color: var(--ink-subtle);
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill-done {
+  width: 100%;
+  height: 100%;
+  background: var(--success);
+}
+
+.progress-bar-fill-active {
+  width: 55%;
+  height: 100%;
+  background: var(--accent);
+}
+
+.progress-bar-fill-waiting {
+  width: 0%;
+  height: 100%;
+  background: transparent;
+}
+
+.progress-footnote {
+  font-size: 13.5px;
+  color: var(--ink-muted);
+}
+
+/* Error Card */
+.error-card {
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+  border-radius: 12px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.error-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.command-box {
+  background: #231C16;
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.command-text {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: #F8F2E6;
+}
+
+.btn-copy {
+  background: #3A3026;
+  border: 1px solid #57483B;
+  color: #F8F2E6;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-copy:hover {
+  background: #4A3E32;
+}
+
+.error-actions {
+  display: flex;
+  align-items: center;
+}
+
+.btn-try-again {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-try-again:hover {
+  background: rgba(178, 58, 43, 0.08);
+}
+
+/* Shared Bottom Bar */
+.bottombar {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 10px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.bottombar-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.status-dot {
+  color: var(--success);
+  font-size: 12px;
+}
+
+.bottombar-right {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink-subtle);
+}
+</style>
+</head>
+<body>
+
+<!-- Shared Top Bar -->
+<header class="topbar">
+  <a href="#" class="brand">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="18" height="18" rx="3" stroke="#2B2118" stroke-width="2"/>
+      <line x1="7" y1="8" x2="17" y2="8" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+      <line x1="7" y1="12" x2="17" y2="12" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+      <line x1="7" y1="16" x2="13" y2="16" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span class="brand-name">Heirloom</span>
+  </a>
+
+  <div class="topbar-center">
+    <div class="search-wrap">
+      <input type="text" class="search-input" placeholder="Search your archive, e.g. which letters mention the farm?" />
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <a href="#" class="btn-add">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <line x1="7" y1="2" x2="7" y2="12" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+        <line x1="2" y1="7" x2="12" y2="7" stroke="#2B2118" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Add page
+    </a>
+    <a href="#" class="nav-link">Library</a>
+    <a href="#" class="nav-link">Settings</a>
+  </div>
+</header>
+
+<!-- Main Form Container -->
+<main class="main-content">
+  <div class="container">
+    
+    <!-- 1. Header & Breadcrumb -->
+    <div class="page-header">
+      <a href="#" class="breadcrumb">← Library / New page</a>
+      <h1 class="page-title">Add a page</h1>
+      <p class="page-subtitle">Photos stay on this computer. Nothing is uploaded anywhere.</p>
+    </div>
+
+    <!-- 2. Drop Area with CSS-drawn paper -->
+    <div class="drop-area">
+      <div class="paper-sheet" aria-hidden="true">
+        <div class="paper-line"></div>
+        <div class="paper-line"></div>
+        <div class="paper-line"></div>
+        <div class="paper-line"></div>
+      </div>
+      <div class="drop-title">Drop a photo here or choose a file</div>
+      <div class="drop-muted">JPG or PNG, one page at a time</div>
+      <button type="button" class="btn-choose">Choose file</button>
+    </div>
+
+    <!-- 3. Optional Fields Card -->
+    <div class="card fields-card">
+      <h2 class="card-title">Optional, helps the model</h2>
+      
+      <div class="form-group">
+        <label class="form-label" for="lang-script">Language or script</label>
+        <input type="text" id="lang-script" class="form-input" placeholder="e.g. Hindi in Devanagari" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="author">Who wrote it</label>
+        <input type="text" id="author" class="form-input" />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="approx-date">Approximate date</label>
+        <input type="text" id="approx-date" class="form-input" placeholder="e.g. around 1952" />
+      </div>
+    </div>
+
+    <!-- 4. Submit & Cancel Actions -->
+    <div class="action-row">
+      <button type="button" class="btn-submit">Add and read this page</button>
+      <a href="#" class="cancel-link">Cancel</a>
+    </div>
+
+    <!-- 5. Progress Card -->
+    <div class="card progress-card">
+      <div class="steps-row">
+        <!-- Step 1: Done -->
+        <div class="step-col">
+          <div class="step-header step-done">
+            <span>✓</span>
+            <span>Reading the handwriting</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill-done"></div>
+          </div>
+        </div>
+
+        <!-- Step 2: In Progress -->
+        <div class="step-col">
+          <div class="step-header step-active">
+            <span>●</span>
+            <span>Translating</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill-active"></div>
+          </div>
+        </div>
+
+        <!-- Step 3: Waiting -->
+        <div class="step-col">
+          <div class="step-header step-waiting">
+            <span>○</span>
+            <span>Finding people, places and dates</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill-waiting"></div>
+          </div>
+        </div>
+      </div>
+      <div class="progress-footnote">This can take a minute on a laptop. You can leave this screen.</div>
+    </div>
+
+    <!-- 6. Error Card -->
+    <div class="error-card">
+      <div class="error-title">The model is not running. Start Ollama and try again.</div>
+      <div class="command-box">
+        <code class="command-text">ollama pull gemma4:e2b</code>
+        <button type="button" class="btn-copy">Copy</button>
+      </div>
+      <div class="error-actions">
+        <button type="button" class="btn-try-again">Try again</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- 7. Shared Bottom Bar -->
+<footer class="bottombar">
+  <div class="bottombar-left">
+    <span class="status-dot">●</span>
+    <span>Running on this computer. No internet needed.</span>
+  </div>
+  <div class="bottombar-right">
+    <span>Model: gemma4:e2b</span>
+  </div>
+</footer>
+
+</body>
+</html>
