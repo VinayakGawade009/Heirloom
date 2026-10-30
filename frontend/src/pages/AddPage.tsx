@@ -131,7 +131,20 @@ export default function AddPage() {
   useEffect(() => {
     if (!createdPageId) return;
 
+    const startTime = Date.now();
+    const MAX_POLL_MS = 210000; // at least 3 minutes (3.5 minutes)
+
     const poll = async () => {
+      // Timeout check: give up only after at least 3 minutes
+      if (Date.now() - startTime > MAX_POLL_MS) {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        setPageError({
+          code: 'model_failed',
+          message: 'Processing took too long. Try again.',
+        });
+        return;
+      }
+
       try {
         const page: Page = await getPage(createdPageId);
         setPageStatus(page.status);
@@ -373,7 +386,7 @@ export default function AddPage() {
               </div>
 
               <p className="text-xs text-muted pt-2 border-t border-rule/50">
-                This can take a minute on a laptop. You can leave this screen.
+                This can take about a minute on a laptop. Everything stays on this computer.
               </p>
             </div>
           )}

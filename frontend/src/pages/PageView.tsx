@@ -98,7 +98,7 @@ function ProgressCard({ status }: { status: PageStatus }) {
         <StepIndicator label="Finding people, places and dates" state={getStepState(status, 3)} />
       </div>
       <p className="text-xs text-muted pt-2 border-t border-rule/50">
-        This can take a minute on a laptop. You can leave this screen.
+        This can take about a minute on a laptop. Everything stays on this computer.
       </p>
     </div>
   );
@@ -162,12 +162,23 @@ export default function PageView() {
     setRefreshing(true);
     setRefreshError(null);
 
+    const refreshStartTime = Date.now();
+    const MAX_REFRESH_MS = 210000; // at least 3 minutes
+
     try {
       const result = await refreshPage(page.id);
       setPage(result);
 
       // Start polling
       refreshPollRef.current = setInterval(async () => {
+        if (Date.now() - refreshStartTime > MAX_REFRESH_MS) {
+          if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+          setRefreshing(false);
+          setRefreshError(
+            new ApiError('model_failed', 'Refresh took too long. Try again.')
+          );
+          return;
+        }
         try {
           const updated = await getPage(page.id);
           setPage(updated);
@@ -209,24 +220,29 @@ export default function PageView() {
     [setPage]
   );
 
-  const handleShowInTranscript = useCallback((start: number, end: number) => {
-    // Clear any previous timer and highlight only this fact
+  const handleShowInTranscript = useCallback((start?: number | null, end?: number | null) => {
+    // Clear any previous timer
     if (highlightTimeoutRef.current) {
       clearTimeout(highlightTimeoutRef.current);
       highlightTimeoutRef.current = null;
     }
-    setHighlightSpan({ start, end });
-    setActiveTab('transcript');
-    // Scroll to highlighted span after tab switch
-    setTimeout(() => {
-      highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
-
-    // Auto-clear highlight after about 3 seconds
-    highlightTimeoutRef.current = setTimeout(() => {
+    if (typeof start === 'number' && typeof end === 'number' && start < end) {
+      setHighlightSpan({ start, end });
+      // Auto-clear highlight after about 3 seconds
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightSpan(null);
+        highlightTimeoutRef.current = null;
+      }, 3000);
+    } else {
       setHighlightSpan(null);
-      highlightTimeoutRef.current = null;
-    }, 3000);
+    }
+    setActiveTab('transcript');
+    // Scroll to highlighted span after tab switch if available
+    if (typeof start === 'number') {
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
   }, []);
 
   // Clear highlight when switching tabs or pressing Escape
@@ -295,7 +311,7 @@ export default function PageView() {
     {
       id: 'facts',
       label: 'Facts',
-      badge: page.facts.length > 0 ? String(page.facts.length) : undefined,
+      badge: (page.facts?.length ?? 0) > 0 ? String(page.facts.length) : undefined,
     },
   ];
 
@@ -328,7 +344,7 @@ export default function PageView() {
       )}
 
       {/* Processing state: show progress card */}
-      {processing && !hasTranscript && <ProgressCard status={page.status} />}
+      {processing && <ProgressCard status={page.status} />}
 
       {/* Refresh error */}
       {refreshError && (

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import type { Page, UncertainSpan, Correction } from '../types';
+import type { Page } from '../types';
 import CorrectionPopover from './CorrectionPopover';
 
 export interface TranscriptTextProps {
@@ -11,72 +11,55 @@ export interface TranscriptTextProps {
   onClearHighlight?: () => void;
 }
 
-interface Segment {
+interface Token {
+  type: 'word' | 'whitespace';
+  text: string;
   start: number;
   end: number;
-  text: string;
-  uncertain: boolean;
-  corrected: Correction | null;
 }
 
-function buildSegments(
-  text: string,
-  uncertain: UncertainSpan[],
-  corrections: Correction[]
-): Segment[] {
+function tokenizeTranscript(text: string): Token[] {
   if (!text) return [];
+  const tokens: Token[] = [];
+  const regex = /\S+/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
 
-  // Create boundary points
-  const boundaries = new Set<number>();
-  boundaries.add(0);
-  boundaries.add(text.length);
+  while ((match = regex.exec(text)) !== null) {
+    const wordStart = match.index;
+    const wordEnd = wordStart + match[0].length;
 
-  for (const u of uncertain) {
-    if (u.start >= 0 && u.start <= text.length) boundaries.add(u.start);
-    if (u.end >= 0 && u.end <= text.length) boundaries.add(u.end);
-  }
-
-  for (const c of corrections) {
-    // Correction matches if text.slice(start, end) === c.new
-    if (c.start >= 0 && c.start <= text.length) boundaries.add(c.start);
-    if (c.end >= 0 && c.end <= text.length) boundaries.add(c.end);
-  }
-
-  const sorted = Array.from(boundaries).sort((a, b) => a - b);
-  const segments: Segment[] = [];
-
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const start = sorted[i];
-    const end = sorted[i + 1];
-    const segText = text.slice(start, end);
-
-    // Check if this segment falls within any uncertain span
-    const isUncertain = uncertain.some(
-      (u) => u.start <= start && u.end >= end
-    );
-
-    // Check if this segment has a matching correction
-    let matchedCorrection: Correction | null = null;
-    for (const c of corrections) {
-      if (c.start <= start && c.end >= end) {
-        // Verify the correction text still matches
-        if (text.slice(c.start, c.end) === c.new) {
-          matchedCorrection = c;
-          break;
-        }
-      }
+    // Any whitespace before this word
+    if (wordStart > lastIndex) {
+      tokens.push({
+        type: 'whitespace',
+        text: text.slice(lastIndex, wordStart),
+        start: lastIndex,
+        end: wordStart,
+      });
     }
 
-    segments.push({
-      start,
-      end,
-      text: segText,
-      uncertain: isUncertain,
-      corrected: matchedCorrection,
+    tokens.push({
+      type: 'word',
+      text: match[0],
+      start: wordStart,
+      end: wordEnd,
+    });
+
+    lastIndex = wordEnd;
+  }
+
+  // Any trailing whitespace
+  if (lastIndex < text.length) {
+    tokens.push({
+      type: 'whitespace',
+      text: text.slice(lastIndex),
+      start: lastIndex,
+      end: text.length,
     });
   }
 
-  return segments;
+  return tokens;
 }
 
 export const TranscriptText: React.FC<TranscriptTextProps> = ({
@@ -95,21 +78,54 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { text, uncertain, corrections } = page.transcript;
+  const text = page.transcript?.text ?? '';
+  const uncertain = page.transcript?.uncertain ?? [];
+  const corrections = page.transcript?.corrections ?? [];
 
-  const segments = useMemo(
-    () => buildSegments(text, uncertain, corrections),
-    [text, uncertain, corrections]
-  );
+  const tokens = useMemo(() => tokenizeTranscript(text), [text]);
 
-  const handleUncertainClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>, start: number, end: number) => {
-      const word = text.slice(start, end);
+  const handleWordClick = useCallback(
+    (
+      e: React.MouseEvent<HTMLSpanElement>,
+      start: number,
+      end: number,
+      word: string
+    ) => {
+      // If user was dragging to select text, do not open the popover
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        return;
+      }
+
+      // Clear fact highlight if active
+      if (highlightSpan && onClearHighlight) {
+        onClearHighlight();
+      }
+
       const rect = e.currentTarget.getBoundingClientRect();
-      const containerRect = containerRef.current?.getBoundingClientRect() || rect;
+      const containerRect =
+        containerRef.current?.getBoundingClientRect() || rect;
       setActivePopover({ start, end, word, rect, containerRect });
     },
-    [text]
+    [highlightSpan, onClearHighlight]
+  );
+
+  const handleWordKeyDown = useCallback(
+    (
+      e: React.KeyboardEvent<HTMLSpanElement>,
+      start: number,
+      end: number,
+      word: string
+    ) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const containerRect =
+          containerRef.current?.getBoundingClientRect() || rect;
+        setActivePopover({ start, end, word, rect, containerRect });
+      }
+    },
+    []
   );
 
   const handleSaved = useCallback(
@@ -132,6 +148,16 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
     );
   }
 
+  // Find the first highlighted word index in advance to attach highlightRef without mutating variables during render
+  const firstHighlightedIndex = highlightSpan
+    ? tokens.findIndex(
+        (t) =>
+          t.type === 'word' &&
+          t.start < highlightSpan.end &&
+          t.end > highlightSpan.start
+      )
+    : -1;
+
   return (
     <div
       ref={containerRef}
@@ -142,86 +168,108 @@ export const TranscriptText: React.FC<TranscriptTextProps> = ({
         }
       }}
     >
-      <div className="font-serif text-transcript leading-[1.7] text-ink whitespace-pre-wrap break-words">
-        {segments.map((seg) => {
-          // Check if this segment overlaps with highlightSpan
-          const isHighlighted =
-            highlightSpan &&
-            seg.start < highlightSpan.end &&
-            seg.end > highlightSpan.start;
-
-          if (seg.uncertain) {
-            // Find the full uncertain span this segment belongs to
-            const uSpan = uncertain.find(
-              (u) => u.start <= seg.start && u.end >= seg.end
+      <div className="font-serif text-transcript leading-[1.7] text-ink whitespace-pre-wrap break-words select-text">
+        {tokens.map((token, index) => {
+          if (token.type === 'whitespace') {
+            // Check if this whitespace is inside the highlighted fact range
+            const isHighlightedSpace = Boolean(
+              highlightSpan &&
+                token.start >= highlightSpan.start &&
+                token.end <= highlightSpan.end
             );
+
             return (
-              <button
-                key={`${seg.start}-${seg.end}`}
-                type="button"
-                onClick={(e) =>
-                  handleUncertainClick(
-                    e,
-                    uSpan?.start ?? seg.start,
-                    uSpan?.end ?? seg.end
-                  )
-                }
-                className={`bg-tint/60 border-b-2 border-dotted border-marigold rounded-[3px] px-0.5 cursor-pointer font-serif text-transcript leading-[1.7] text-ink hover:bg-tint transition-colors focus:outline-none focus:ring-2 focus:ring-marigold/40 ${
-                  isHighlighted ? 'ring-2 ring-marigold bg-tint' : ''
-                }`}
-                ref={isHighlighted && highlightRef ? (highlightRef as React.Ref<HTMLButtonElement>) : undefined}
-                tabIndex={0}
+              <span
+                key={`ws-${token.start}-${token.end}`}
+                className={isHighlightedSpace ? 'bg-tint' : undefined}
               >
-                {seg.text}
-              </button>
+                {token.text}
+              </span>
             );
           }
 
-          if (seg.corrected) {
-            const corrDate = new Date(seg.corrected.at).toLocaleDateString();
-            return (
-              <span
-                key={`${seg.start}-${seg.end}`}
-                className={`border-b-2 border-solid border-marigold relative ${
-                  isHighlighted ? 'bg-tint ring-2 ring-marigold rounded-[3px]' : ''
-                }`}
-                title={`Corrected ${corrDate}`}
-                ref={isHighlighted && highlightRef ? highlightRef : undefined}
-              >
-                {seg.text}
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-marigold" />
-              </span>
-            );
+          // Word token
+          const isUncertain = uncertain.some(
+            (u) => u.start < token.end && u.end > token.start
+          );
+
+          const matchingCorrection = corrections.find(
+            (c) =>
+              c.start < token.end &&
+              c.end > token.start &&
+              text.slice(c.start, c.end) === c.new
+          );
+
+          const isHighlighted = Boolean(
+            highlightSpan &&
+              token.start < highlightSpan.end &&
+              token.end > highlightSpan.start
+          );
+
+          const isFirstHighlighted = index === firstHighlightedIndex;
+          const refToAttach = isFirstHighlighted ? highlightRef : undefined;
+
+          // Compute styles
+          let classes =
+            'inline font-serif text-transcript leading-[1.7] text-ink select-text cursor-pointer rounded-[3px] px-0.5 transition-colors focus:outline-none focus:ring-2 focus:ring-marigold/40 ';
+
+          if (isUncertain) {
+            // Unsure word styling (<mark>-like)
+            classes +=
+              'bg-tint/60 border-b-2 border-dotted border-marigold hover:bg-tint ';
+          } else if (matchingCorrection) {
+            // Corrected word styling
+            classes +=
+              'border-b-2 border-solid border-marigold relative hover:bg-inset ';
+          } else {
+            // Normal word styling
+            classes += 'hover:bg-inset ';
           }
 
           if (isHighlighted) {
-            return (
-              <span
-                key={`${seg.start}-${seg.end}`}
-                className="bg-tint ring-2 ring-marigold rounded-[3px]"
-                ref={highlightRef ?? undefined}
-              >
-                {seg.text}
-              </span>
-            );
+            classes += 'bg-tint ring-2 ring-marigold ';
           }
 
+          const correctionTitle = matchingCorrection
+            ? `Corrected ${new Date(matchingCorrection.at).toLocaleDateString()}`
+            : undefined;
+
           return (
-            <span key={`${seg.start}-${seg.end}`}>{seg.text}</span>
+            <span
+              key={`w-${token.start}-${token.end}`}
+              ref={refToAttach}
+              role="button"
+              tabIndex={0}
+              onClick={(e) =>
+                handleWordClick(e, token.start, token.end, token.text)
+              }
+              onKeyDown={(e) =>
+                handleWordKeyDown(e, token.start, token.end, token.text)
+              }
+              className={classes.trim()}
+              title={correctionTitle}
+            >
+              {token.text}
+              {matchingCorrection && (
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-marigold pointer-events-none" />
+              )}
+            </span>
           );
         })}
       </div>
 
-      {/* Uncertain word count message */}
+      {/* Uncertain word count message & hint */}
       <div className="mt-6 pt-4 border-t border-rule">
         <p className="text-sm text-muted">
           {uncertain.length > 0 ? (
             <>
-              <span className="font-semibold text-ink">{uncertain.length} words</span>{' '}
-              the model was unsure about. Click any highlighted word to review or edit.
+              <span className="font-semibold text-ink">
+                {uncertain.length} {uncertain.length === 1 ? 'word' : 'words'}
+              </span>{' '}
+              the model was unsure about. Click any word to correct it.
             </>
           ) : (
-            'No uncertain words.'
+            'Click any word to correct it.'
           )}
         </p>
       </div>

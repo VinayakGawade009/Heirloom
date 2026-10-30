@@ -3,7 +3,7 @@ import type { Fact, FactKind, Page } from '../types';
 
 export interface FactsPanelProps {
   page: Page;
-  onShowInTranscript: (start: number, end: number) => void;
+  onShowInTranscript: (start?: number | null, end?: number | null) => void;
 }
 
 const KIND_ORDER: FactKind[] = ['person', 'place', 'date', 'item'];
@@ -14,32 +14,50 @@ const KIND_LABELS: Record<FactKind, string> = {
   item: 'Items',
 };
 
-function buildExcerpt(text: string, fact: Fact): { before: string; match: string; after: string; valid: boolean } {
+export function getFactRange(text: string, fact: Fact): { start: number; end: number } | null {
+  if (!text || !fact || !fact.text) return null;
+
   const { start, end } = fact;
 
-  // If positions fall outside text, show without highlight
-  if (start < 0 || end > text.length || start >= end) {
-    // Try to find the text by content
-    const idx = text.indexOf(fact.text);
-    if (idx === -1) {
-      return { before: '', match: fact.text, after: '', valid: false };
-    }
-    // Use found position
-    const radius = 60;
-    const excerptStart = Math.max(0, idx - radius);
-    const excerptEnd = Math.min(text.length, idx + fact.text.length + radius);
-    const beforeText = text.slice(excerptStart, idx);
-    const matchText = text.slice(idx, idx + fact.text.length);
-    const afterText = text.slice(idx + fact.text.length, excerptEnd);
-
-    return {
-      before: (excerptStart > 0 ? '…' : '') + beforeText,
-      match: matchText,
-      after: afterText + (excerptEnd < text.length ? '…' : ''),
-      valid: true,
-    };
+  // 1. If positions are within bounds and slice matches fact text
+  if (
+    typeof start === 'number' &&
+    typeof end === 'number' &&
+    start >= 0 &&
+    end <= text.length &&
+    start < end &&
+    text.slice(start, end) === fact.text
+  ) {
+    return { start, end };
   }
 
+  // 2. Fallback: find first occurrence of fact.text in transcript
+  const idx = text.indexOf(fact.text);
+  if (idx !== -1) {
+    return { start: idx, end: idx + fact.text.length };
+  }
+
+  // 3. If positions are within bounds (even if text slightly shifted)
+  if (
+    typeof start === 'number' &&
+    typeof end === 'number' &&
+    start >= 0 &&
+    end <= text.length &&
+    start < end
+  ) {
+    return { start, end };
+  }
+
+  return null;
+}
+
+function buildExcerpt(text: string, fact: Fact): { before: string; match: string; after: string; valid: boolean } {
+  const range = getFactRange(text, fact);
+  if (!range) {
+    return { before: '', match: fact.text, after: '', valid: false };
+  }
+
+  const { start, end } = range;
   const radius = 60;
   const excerptStart = Math.max(0, start - radius);
   const excerptEnd = Math.min(text.length, end + radius);
@@ -57,7 +75,8 @@ function buildExcerpt(text: string, fact: Fact): { before: string; match: string
 
 export const FactsPanel: React.FC<FactsPanelProps> = ({ page, onShowInTranscript }) => {
   const [selectedFact, setSelectedFact] = useState<Fact | null>(null);
-  const { facts, transcript } = page;
+  const facts = page.facts ?? [];
+  const transcript = page.transcript ?? { text: '', uncertain: [], corrections: [] };
 
   const grouped = useMemo(() => {
     const groups: Record<FactKind, Fact[]> = {
@@ -66,13 +85,13 @@ export const FactsPanel: React.FC<FactsPanelProps> = ({ page, onShowInTranscript
       date: [],
       item: [],
     };
-    for (const f of facts) {
+    for (const f of page.facts ?? []) {
       if (groups[f.kind]) {
         groups[f.kind].push(f);
       }
     }
     return groups;
-  }, [facts]);
+  }, [page.facts]);
 
   const handleSelect = useCallback(
     (fact: Fact) => {
@@ -107,7 +126,7 @@ export const FactsPanel: React.FC<FactsPanelProps> = ({ page, onShowInTranscript
   if (facts.length === 0) {
     return (
       <div className="py-8 text-center">
-        <p className="text-sm text-muted">No facts found yet.</p>
+        <p className="text-sm text-muted">No people, places, dates or items found yet.</p>
       </div>
     );
   }
@@ -134,7 +153,12 @@ export const FactsPanel: React.FC<FactsPanelProps> = ({ page, onShowInTranscript
           <button
             type="button"
             onClick={() => {
-              onShowInTranscript(selectedFact.start, selectedFact.end);
+              const range = getFactRange(transcript.text, selectedFact);
+              if (range) {
+                onShowInTranscript(range.start, range.end);
+              } else {
+                onShowInTranscript(null, null);
+              }
             }}
             className="self-start font-sans text-sm font-semibold text-marigold hover:text-marigold-hover cursor-pointer transition-colors"
           >
@@ -182,4 +206,3 @@ export const FactsPanel: React.FC<FactsPanelProps> = ({ page, onShowInTranscript
 };
 
 export default FactsPanel;
-

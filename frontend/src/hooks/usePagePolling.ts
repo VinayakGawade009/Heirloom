@@ -13,6 +13,7 @@ export interface UsePagePollingResult {
 }
 
 const POLL_INTERVAL = 1500;
+const MAX_POLL_DURATION_MS = 210000; // at least 3 minutes (3.5 minutes)
 
 function isTerminal(status: string): boolean {
   return status === 'done' || status === 'error';
@@ -24,6 +25,7 @@ export function usePagePolling(id: string | number): UsePagePollingResult {
   const [error, setError] = useState<ApiError | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  const startTimeRef = useRef<number>(Date.now());
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
@@ -33,6 +35,15 @@ export function usePagePolling(id: string | number): UsePagePollingResult {
   }, []);
 
   const fetchPage = useCallback(async () => {
+    // Timeout check: give up only after at least 3 minutes
+    if (Date.now() - startTimeRef.current > MAX_POLL_DURATION_MS) {
+      stopPolling();
+      if (!mountedRef.current) return;
+      setLoading(false);
+      setError(new ApiError('model_failed', 'Processing took too long. Try again.'));
+      return;
+    }
+
     try {
       const p = await getPage(id);
       if (!mountedRef.current) return;
@@ -60,14 +71,11 @@ export function usePagePolling(id: string | number): UsePagePollingResult {
   }, [fetchPage, stopPolling]);
 
   const reload = useCallback(() => {
+    startTimeRef.current = Date.now();
     setLoading(true);
     setError(null);
     fetchPage().then(() => {
-      // After initial fetch, start polling if not terminal
       if (mountedRef.current) {
-        // Check current page state via a re-fetch
-        // The fetchPage already set the page, so check it via another approach
-        // We just start polling and let the interval handle it
         startPolling();
       }
     });
@@ -75,6 +83,7 @@ export function usePagePolling(id: string | number): UsePagePollingResult {
 
   useEffect(() => {
     mountedRef.current = true;
+    startTimeRef.current = Date.now();
     setLoading(true);
     setError(null);
 
