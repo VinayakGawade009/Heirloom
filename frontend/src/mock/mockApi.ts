@@ -91,38 +91,115 @@ function saveSettingsToStorage(settings: Settings): void {
 }
 
 function advancePageProgress(page: Page): boolean {
-  if (page.status === 'error' || page.status === 'done') {
-    return false;
-  }
-  if (!page.createdAtMs) {
+  if (page.status === 'error') {
     return false;
   }
 
-  const elapsed = Date.now() - page.createdAtMs;
   let changed = false;
 
-  if (elapsed < 2000) {
-    if (page.status !== 'queued') {
-      page.status = 'queued';
+  // 3. POST refresh is asynchronous: advances translating -> extracting -> done (~2s each)
+  if (page.refreshStartedAtMs) {
+    const elapsed = Date.now() - page.refreshStartedAtMs;
+    if (elapsed < 2000) {
+      if (page.status !== 'translating') {
+        page.status = 'translating';
+        changed = true;
+      }
+    } else if (elapsed < 4000) {
+      if (page.status !== 'extracting') {
+        page.status = 'extracting';
+        changed = true;
+      }
+    } else {
+      page.status = 'done';
+      delete page.refreshStartedAtMs;
+
+      // Fact positions are recomputed when it reaches 'done'
+      const updatedFacts: Fact[] = [];
+      for (const fact of page.facts) {
+        const foundIndex = page.transcript.text.indexOf(fact.text);
+        if (foundIndex !== -1) {
+          updatedFacts.push({
+            ...fact,
+            start: foundIndex,
+            end: foundIndex + fact.text.length,
+          });
+        }
+      }
+      page.facts = updatedFacts;
       changed = true;
     }
-  } else if (elapsed < 4000) {
-    if (page.status !== 'transcribing') {
-      page.status = 'transcribing';
-      changed = true;
-    }
-  } else if (elapsed < 6000) {
-    if (page.status !== 'translating') {
-      page.status = 'translating';
-      page.transcript.text = CANNED_PAGE_DATA.transcript;
-      page.transcript.uncertain = JSON.parse(
-        JSON.stringify(CANNED_PAGE_DATA.uncertain)
-      );
-      changed = true;
-    }
-  } else if (elapsed < 8000) {
-    if (page.status !== 'extracting') {
-      page.status = 'extracting';
+    return changed;
+  }
+
+  // Handle stage progression for newly created pages
+  if (page.createdAtMs) {
+    const elapsed = Date.now() - page.createdAtMs;
+
+    if (elapsed < 2000) {
+      if (page.status !== 'queued') {
+        page.status = 'queued';
+        changed = true;
+      }
+      // 2. Before transcript exists, text is '', translation.text is '', facts is []
+      if (
+        page.transcript.text !== '' ||
+        page.translation.text !== '' ||
+        page.facts.length !== 0
+      ) {
+        page.transcript = { text: '', uncertain: [], corrections: [] };
+        page.translation = { language: 'English', text: '' };
+        page.facts = [];
+        changed = true;
+      }
+    } else if (elapsed < 4000) {
+      if (page.status !== 'transcribing') {
+        page.status = 'transcribing';
+        changed = true;
+      }
+      if (
+        page.transcript.text !== '' ||
+        page.translation.text !== '' ||
+        page.facts.length !== 0
+      ) {
+        page.transcript = { text: '', uncertain: [], corrections: [] };
+        page.translation = { language: 'English', text: '' };
+        page.facts = [];
+        changed = true;
+      }
+    } else if (elapsed < 6000) {
+      if (page.status !== 'translating') {
+        page.status = 'translating';
+        changed = true;
+      }
+      if (page.transcript.text !== CANNED_PAGE_DATA.transcript) {
+        page.transcript.text = CANNED_PAGE_DATA.transcript;
+        page.transcript.uncertain = JSON.parse(
+          JSON.stringify(CANNED_PAGE_DATA.uncertain)
+        );
+        page.translation = { language: 'English', text: '' };
+        page.facts = [];
+        changed = true;
+      }
+    } else if (elapsed < 8000) {
+      if (page.status !== 'extracting') {
+        page.status = 'extracting';
+        changed = true;
+      }
+      if (page.translation.text !== CANNED_PAGE_DATA.translation) {
+        page.transcript.text = CANNED_PAGE_DATA.transcript;
+        page.transcript.uncertain = JSON.parse(
+          JSON.stringify(CANNED_PAGE_DATA.uncertain)
+        );
+        page.translation = {
+          language: 'English',
+          text: CANNED_PAGE_DATA.translation,
+        };
+        page.facts = [];
+        changed = true;
+      }
+    } else {
+      page.status = 'done';
       page.transcript.text = CANNED_PAGE_DATA.transcript;
       page.transcript.uncertain = JSON.parse(
         JSON.stringify(CANNED_PAGE_DATA.uncertain)
@@ -131,25 +208,20 @@ function advancePageProgress(page: Page): boolean {
         language: 'English',
         text: CANNED_PAGE_DATA.translation,
       };
+      page.facts = JSON.parse(JSON.stringify(CANNED_PAGE_DATA.facts));
+      delete page.createdAtMs;
       changed = true;
     }
-  } else {
-    page.status = 'done';
-    page.transcript.text = CANNED_PAGE_DATA.transcript;
-    page.transcript.uncertain = JSON.parse(
-      JSON.stringify(CANNED_PAGE_DATA.uncertain)
-    );
-    page.translation = {
-      language: 'English',
-      text: CANNED_PAGE_DATA.translation,
-    };
-    page.facts = JSON.parse(JSON.stringify(CANNED_PAGE_DATA.facts));
-    changed = true;
   }
+
   return changed;
 }
 
-function extractSnippet(text: string, matchIndex: number, queryLength: number): string {
+function extractSnippet(
+  text: string,
+  matchIndex: number,
+  queryLength: number
+): string {
   const targetRadius = 25;
   const start = Math.max(0, matchIndex - targetRadius);
   const end = Math.min(text.length, matchIndex + queryLength + 35);
@@ -229,7 +301,7 @@ export async function listPages(q?: string): Promise<{ pages: PageSummary[] }> {
     }
 
     // 2. Search translation
-    if (!matchedSnippet && p.translation?.text) {
+    if (!matchedSnippet && p.translation.text) {
       const idx = p.translation.text.toLowerCase().indexOf(query);
       if (idx !== -1) {
         matchedSnippet = extractSnippet(p.translation.text, idx, query.length);
@@ -295,16 +367,18 @@ export async function createPage(
       title,
       image_url: '',
       status: 'error',
+      // 1. Page.error is {code, message} where code is one of our error codes
       error: {
         code: 'model_failed',
-        message: 'Local model failed to transcribe image',
+        message: 'The model could not read this page.',
       },
       model: 'gemma4:e2b',
       language_hint: meta?.language_hint || null,
       writer: meta?.writer || null,
       approx_date: meta?.approx_date || null,
       transcript: { text: '', uncertain: [], corrections: [] },
-      translation: null,
+      // 2. translation.text is ''
+      translation: { language: 'English', text: '' },
       facts: [],
       added_at: new Date().toISOString(),
     };
@@ -323,8 +397,9 @@ export async function createPage(
     language_hint: meta?.language_hint || null,
     writer: meta?.writer || null,
     approx_date: meta?.approx_date || null,
+    // 2. Before transcript exists, transcript is {text: '', uncertain: [], corrections: []}, translation.text is '', facts is []
     transcript: { text: '', uncertain: [], corrections: [] },
-    translation: null,
+    translation: { language: 'English', text: '' },
     facts: [],
     added_at: new Date().toISOString(),
     createdAtMs: Date.now(),
@@ -379,6 +454,14 @@ export async function addCorrection(
 
   const lengthDiff = new_text.length - (end - start);
 
+  // Shift previously existing corrections that were positioned after the edited span
+  for (const c of page.transcript.corrections) {
+    if (c.start >= end) {
+      c.start += lengthDiff;
+      c.end += lengthDiff;
+    }
+  }
+
   // Remove that span from uncertain
   const remainingUncertain: UncertainSpan[] = [];
   for (const u of page.transcript.uncertain) {
@@ -401,7 +484,8 @@ export async function addCorrection(
   }
   page.transcript.uncertain = remainingUncertain;
 
-  // Append correction
+  // 4. In transcript.corrections, start and end are the position of the corrected word in the CURRENT transcript text:
+  // start to start + new.length
   page.transcript.corrections.push({
     start,
     end: start + new_text.length,
@@ -414,6 +498,8 @@ export async function addCorrection(
   return JSON.parse(JSON.stringify(page));
 }
 
+// 3. POST refresh is asynchronous: refreshPage returns the Page immediately with status 'translating', not 'done'.
+// The page then goes translating, extracting, done (~2s each, computed from elapsed time when getPage is polled).
 export async function refreshPage(id: number | string): Promise<Page> {
   await randomDelay();
   const mock = getMockParam();
@@ -430,29 +516,10 @@ export async function refreshPage(id: number | string): Promise<Page> {
     throw new ApiError('unknown', `Page #${id} not found`);
   }
 
-  // Briefly set status translating then done
+  // Return the Page immediately with status 'translating', not 'done'
   page.status = 'translating';
+  page.refreshStartedAtMs = Date.now();
   savePagesToStorage(pages);
 
-  await new Promise((res) => setTimeout(res, 200));
-
-  page.status = 'done';
-
-  // Recompute fact positions by searching each fact's text in the corrected transcript,
-  // dropping facts that are no longer found
-  const updatedFacts: Fact[] = [];
-  for (const fact of page.facts) {
-    const foundIndex = page.transcript.text.indexOf(fact.text);
-    if (foundIndex !== -1) {
-      updatedFacts.push({
-        ...fact,
-        start: foundIndex,
-        end: foundIndex + fact.text.length,
-      });
-    }
-  }
-  page.facts = updatedFacts;
-
-  savePagesToStorage(pages);
   return JSON.parse(JSON.stringify(page));
 }

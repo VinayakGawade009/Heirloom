@@ -279,7 +279,10 @@ export const SEED_PAGES: Page[] = [
       uncertain: [],
       corrections: [],
     },
-    translation: null,
+    translation: {
+      language: 'English',
+      text: '',
+    },
     facts: [],
     added_at: '2026-10-30T10:10:00',
   },
@@ -318,7 +321,7 @@ export const SEED_PAGES: Page[] = [
     status: 'error',
     error: {
       code: 'model_failed',
-      message: 'Local model failed to transcribe image',
+      message: 'The model could not read this page.',
     },
     model: 'gemma4:e2b',
     language_hint: null,
@@ -329,7 +332,10 @@ export const SEED_PAGES: Page[] = [
       uncertain: [],
       corrections: [],
     },
-    translation: null,
+    translation: {
+      language: 'English',
+      text: '',
+    },
     facts: [],
     added_at: '2026-10-30T10:20:00',
   },

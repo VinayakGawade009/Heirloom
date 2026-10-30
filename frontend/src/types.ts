@@ -19,6 +19,7 @@ export interface UncertainSpan {
   end: number;
 }
 
+// 4. In transcript.corrections, start and end are the position of the corrected word in the CURRENT transcript text, i.e. start to start + new.length (not the old word's span).
 export interface Correction {
   start: number;
   end: number;
@@ -27,6 +28,7 @@ export interface Correction {
   at: string;
 }
 
+// 2. Before a transcript exists (status queued or transcribing), transcript is {text: '', uncertain: [], corrections: []}, translation.text is '', and facts is [].
 export interface Transcript {
   text: string;
   uncertain: UncertainSpan[];
@@ -46,26 +48,29 @@ export interface Fact {
   end: number;
 }
 
+// 1. Page.error is null when there is no error, otherwise an object {code, message} where code is one of our error codes.
 export interface PageError {
   code: ErrorCode;
   message: string;
 }
 
+// 3. POST refresh is asynchronous: refreshPage returns the Page immediately with status 'translating', not 'done'. The page then goes translating, extracting, done (about 2 seconds per stage, computed from elapsed time when getPage is polled). Fact positions are recomputed when it reaches 'done'.
 export interface Page {
   id: number;
   title: string;
   image_url: string;
   status: PageStatus;
-  error: PageError | null;
+  error: { code: ErrorCode; message: string } | null;
   model: string;
   language_hint: string | null;
   writer: string | null;
   approx_date: string | null;
   transcript: Transcript;
-  translation: Translation | null;
+  translation: Translation;
   facts: Fact[];
   added_at?: string;
   createdAtMs?: number;
+  refreshStartedAtMs?: number;
 }
 
 export interface PageSummary {
