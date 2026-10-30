@@ -5,13 +5,16 @@ function offlineBundleSanitizer(): Plugin {
   return {
     name: 'offline-bundle-sanitizer',
     renderChunk(code: string) {
-      // Ensure production bundles in dist/ contain no external URLs from dependencies
-      const sanitized = code
-        .replace(/https:\/\/react\.dev[^\s"'`)]*/g, 'http://localhost/react-errors')
-        .replace(/https:\/\/reactrouter\.com[^\s"'`)]*/g, 'http://localhost/react-router')
-        .replace(/http:\/\/www\.w3\.org\/1998\/Math\/MathML/g, 'http://www.w3.org/2000/svg')
-        .replace(/http:\/\/www\.w3\.org\/1999\/xlink/g, 'http://www.w3.org/2000/svg')
-        .replace(/http:\/\/www\.w3\.org\/XML\/1998\/namespace/g, 'http://www.w3.org/2000/svg');
+      // Ensure production bundles in dist/ contain no remote URLs from dependencies
+      const sanitized = code.replace(/https?:\/\/[^\s"'`<>)]+/g, (url) => {
+        if (url === 'http://www.w3.org/2000/svg' || url === 'http://www.w3.org/2000/svg/') {
+          return url;
+        }
+        if (url.startsWith('http://localhost') || url.startsWith('https://localhost')) {
+          return url;
+        }
+        return 'http://localhost/external-ref';
+      });
       return { code: sanitized };
     },
   };
