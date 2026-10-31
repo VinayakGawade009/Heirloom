@@ -7,6 +7,7 @@ import queue
 import threading
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image, ImageOps
 
@@ -16,6 +17,14 @@ from .db import connect
 
 PROCESSING = ("queued", "transcribing", "translating", "extracting")
 FACT_KINDS = ("person", "place", "date", "item")
+
+
+class PageNotFoundError(Exception):
+    pass
+
+
+class PageBusyError(Exception):
+    pass
 
 
 class ApiError(Exception):
@@ -449,6 +458,39 @@ def add_finished_page(data, writer, approx_date, language_hint, text, uncertain,
     save_facts(page_id, facts, len(text))
     _set_status(page_id, "done")
     return page_id
+
+
+def _safe_unlink(base_dir: Path, filename: str | None) -> None:
+    if not filename:
+        return
+    target = (base_dir / filename).resolve()
+    data_dir = db.DATA_DIR.resolve()
+    base_dir_resolved = base_dir.resolve()
+    if data_dir in target.parents and base_dir_resolved in target.parents:
+        try:
+            target.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def delete_page(page_id: int) -> dict:
+    with connect() as conn:
+        row = conn.execute("SELECT id, status, image_file, thumb_file FROM pages WHERE id = ?", (page_id,)).fetchone()
+        if row is None:
+            raise PageNotFoundError()
+        if row["status"] in PROCESSING or row["status"] not in ("done", "error"):
+            raise PageBusyError()
+
+        conn.execute("DELETE FROM pages_fts WHERE page_id = ?", (page_id,))
+        conn.execute("DELETE FROM corrections WHERE page_id = ?", (page_id,))
+        conn.execute("DELETE FROM facts WHERE page_id = ?", (page_id,))
+        conn.execute("DELETE FROM transcripts WHERE page_id = ?", (page_id,))
+        conn.execute("DELETE FROM translations WHERE page_id = ?", (page_id,))
+        conn.execute("DELETE FROM pages WHERE id = ?", (page_id,))
+
+    _safe_unlink(db.MEDIA_DIR / "pages", row["image_file"])
+    _safe_unlink(db.MEDIA_DIR / "thumbs", row["thumb_file"])
+    return {"ok": True}
 
 
 def reset_all() -> None:

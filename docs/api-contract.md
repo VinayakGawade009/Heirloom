@@ -12,6 +12,7 @@
 | GET | `/api/pages/{id}` | none | `Page` |
 | POST | `/api/pages/{id}/corrections` | `{start, end, new_text}` | `Page` |
 | POST | `/api/pages/{id}/refresh` | none | `Page` |
+| DELETE | `/api/pages/{id}` | none | `{ok: true}` (200), 404 `{"detail": "Page not found"}`, 409 `{"detail": "Page is still being processed"}` |
 
 ## Data Shapes
 
@@ -62,3 +63,6 @@ Arushi implements these in `backend/app/engine/`. Aniruddha calls them and uses 
 * `extract(text, model) -> [{"kind": str, "text": str, "start": int, "end": int}]`
 
 **Error Handling:** Every function raises `EngineError(code, message)` using the same three error codes as the API. Errors return an HTTP error status and `{"error": {"code": "...", "message": "..."}}`. The codes the frontend handles are `ollama_not_running`, `model_not_installed` and `model_failed`.
+DELETE `/api/pages/{id}` returns 404 `{"detail": "Page not found"}` if the page does not exist, and 409 `{"detail": "Page is still being processed"}` if the page is currently being processed.
+
+DELETE `/api/pages/{id}` returns 404 `{"detail": "Page not found"}` if the page does not exist, and 409 `{"detail": "Page is still being processed"}` if the page is currently being processed.

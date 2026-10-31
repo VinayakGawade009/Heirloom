@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import type { PageSummary } from '../types';
-import { listPages, ApiError } from '../api';
+import { listPages, deletePage, ApiError } from '../api';
 import PaperThumb from '../components/PaperThumb';
 import StatusPill from '../components/StatusPill';
 import ErrorCard from '../components/ErrorCard';
 import EmptyState from '../components/EmptyState';
-import { PlusIcon, FileTextIcon } from '../components/icons';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { PlusIcon, FileTextIcon, TrashIcon, CheckIcon } from '../components/icons';
 
 function formatShortDate(dateStr?: string): string {
   if (!dateStr) return 'Added recently';
@@ -53,12 +54,20 @@ export default function LibraryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
 
+  // Deletion state
+  const [deletingPage, setDeletingPage] = useState<PageSummary | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
@@ -113,6 +122,52 @@ export default function LibraryPage() {
     };
   }, [pages, loadData]);
 
+  const handleConfirmDelete = async () => {
+    if (!deletingPage || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deletePage(deletingPage.id);
+      // Remove card from list without reload
+      if (isMountedRef.current) {
+        setPages((prev) => prev.filter((p) => p.id !== deletingPage.id));
+        // Clear localStorage keys
+        try {
+          localStorage.removeItem(`heirloom_corrections_count_${deletingPage.id}`);
+        } catch {
+          // ignore
+        }
+        setDeletingPage(null);
+        setIsDeleting(false);
+
+        // Show brief success toast for ~3 seconds
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToastMessage('Page deleted.');
+        toastTimerRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            setToastMessage(null);
+          }
+          toastTimerRef.current = null;
+        }, 3000);
+      }
+    } catch (err) {
+      if (isMountedRef.current) {
+        setIsDeleting(false);
+        if (err instanceof ApiError) {
+          setDeleteError(err.message);
+        } else {
+          setDeleteError((err as Error).message || 'Failed to delete page.');
+        }
+      }
+    }
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
+    setDeletingPage(null);
+    setDeleteError(null);
+  };
+
   if (loading) {
     return (
       <div className="py-12 text-center text-muted text-[16px] flex flex-col items-center justify-center gap-3">
@@ -136,6 +191,16 @@ export default function LibraryPage() {
 
     return (
       <div className="flex flex-col gap-6">
+        {toastMessage && (
+          <div
+            role="status"
+            className="bg-panel border border-rule text-ink px-4 py-2.5 rounded-card shadow-xs flex items-center gap-2 text-sm font-medium"
+          >
+            <CheckIcon width={16} height={16} className="text-success flex-shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
         <div className="border-b border-rule pb-4 flex items-baseline justify-between gap-4">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-serif text-3xl font-bold text-ink tracking-tight">
@@ -148,7 +213,7 @@ export default function LibraryPage() {
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="text-sm font-medium text-muted hover:text-ink cursor-pointer"
+            className="text-sm font-medium text-muted hover:text-ink cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 rounded-sm"
           >
             Clear search
           </button>
@@ -161,7 +226,7 @@ export default function LibraryPage() {
               <button
                 type="button"
                 onClick={() => navigate('/')}
-                className="inline-flex items-center justify-center bg-panel hover:bg-inset border border-rule text-ink font-sans text-sm font-semibold px-4 py-2 rounded-btn transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center bg-panel hover:bg-inset border border-rule text-ink font-sans text-sm font-semibold px-4 py-2 rounded-btn transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2"
               >
                 Clear search
               </button>
@@ -169,76 +234,127 @@ export default function LibraryPage() {
           />
         ) : (
           <div className="flex flex-col gap-4">
-            {pages.map((page) => (
-              <Link
-                key={page.id}
-                to={`/pages/${page.id}`}
-                className="bg-panel border border-rule hover:border-marigold rounded-panel p-5 flex items-start gap-5 transition-colors group"
-              >
-                {/* Small thumbnail */}
-                <div className="w-16 flex-shrink-0">
-                  {page.thumbnail_url ? (
-                    <img
-                      src={page.thumbnail_url}
-                      alt={page.title}
-                      className="w-16 aspect-[3/4] object-cover rounded-sm border border-rule"
-                    />
-                  ) : (
-                    <PaperThumb compact />
-                  )}
+            {pages.map((page) => {
+              const isInProgress = page.status !== 'done' && page.status !== 'error';
+
+              return (
+                <div key={page.id} className="relative group">
+                  <Link
+                    to={`/pages/${page.id}`}
+                    className="bg-panel border border-rule hover:border-marigold rounded-panel p-5 pr-14 flex items-start gap-5 transition-colors"
+                  >
+                    {/* Small thumbnail */}
+                    <div className="w-16 flex-shrink-0">
+                      {page.thumbnail_url ? (
+                        <img
+                          src={page.thumbnail_url}
+                          alt={page.title}
+                          className="w-16 aspect-[3/4] object-cover rounded-sm border border-rule"
+                        />
+                      ) : (
+                        <PaperThumb compact />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 flex flex-col gap-2 min-w-0">
+                      <div className="flex items-center justify-between gap-4">
+                        <h2 className="font-serif text-xl font-bold text-ink group-hover:text-black truncate">
+                          {page.title}
+                        </h2>
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted font-medium flex-shrink-0">
+                          <FileTextIcon width={13} height={13} />
+                          Found in transcript
+                        </span>
+                      </div>
+
+                      {page.snippet && (
+                        <p className="font-serif text-base text-ink/90 leading-relaxed line-clamp-3">
+                          “<HighlightedSnippet text={page.snippet} query={q} />”
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between text-xs text-muted pt-1">
+                        <span>{formatShortDate(page.added_at)}</span>
+                        <StatusPill status={page.status} />
+                      </div>
+                    </div>
+                  </Link>
+
+                  {/* Trash icon button */}
+                  <button
+                    type="button"
+                    aria-label="Delete page"
+                    disabled={isInProgress}
+                    title={isInProgress ? 'Wait until this page has finished processing' : 'Delete page'}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDeletingPage(page);
+                    }}
+                    className="absolute top-4 right-4 p-1.5 rounded-full bg-panel/90 border border-rule/70 text-muted hover:text-danger hover:bg-panel active:bg-tint/40 shadow-xs transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 z-10"
+                  >
+                    <TrashIcon width={14} height={14} />
+                  </button>
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 flex flex-col gap-2 min-w-0">
-                  <div className="flex items-center justify-between gap-4">
-                    <h2 className="font-serif text-xl font-bold text-ink group-hover:text-black truncate">
-                      {page.title}
-                    </h2>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted font-medium flex-shrink-0">
-                      <FileTextIcon width={13} height={13} />
-                      Found in transcript
-                    </span>
-                  </div>
-
-                  {page.snippet && (
-                    <p className="font-serif text-base text-ink/90 leading-relaxed line-clamp-3">
-                      “<HighlightedSnippet text={page.snippet} query={q} />”
-                    </p>
-                  )}
-
-                  <div className="flex items-center justify-between text-xs text-muted pt-1">
-                    <span>{formatShortDate(page.added_at)}</span>
-                    <StatusPill status={page.status} />
-                  </div>
-                </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
+
+        <ConfirmDialog
+          isOpen={!!deletingPage}
+          isDeleting={isDeleting}
+          errorMessage={deleteError}
+          onConfirm={handleConfirmDelete}
+          onCancel={handleCancelDelete}
+        />
       </div>
     );
   }
 
-  // --- Without Search Query ---
+  // --- Without Search Query: Empty State ---
   if (pages.length === 0) {
     return (
-      <EmptyState
-        message="No pages yet. Add a photo of an old letter to begin."
-        action={
-          <Link
-            to="/add"
-            className="inline-flex items-center gap-1.5 bg-marigold hover:bg-marigold-hover active:bg-marigold-active text-ink font-sans text-sm font-semibold px-5 py-2.5 rounded-btn transition-colors cursor-pointer"
+      <div className="flex flex-col gap-6">
+        {toastMessage && (
+          <div
+            role="status"
+            className="bg-panel border border-rule text-ink px-4 py-2.5 rounded-card shadow-xs flex items-center gap-2 text-sm font-medium"
           >
-            <PlusIcon width={16} height={16} />
-            <span>Add page</span>
-          </Link>
-        }
-      />
+            <CheckIcon width={16} height={16} className="text-success flex-shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        )}
+
+        <EmptyState
+          message="No pages yet. Add a photo of an old letter to begin."
+          action={
+            <Link
+              to="/add"
+              className="inline-flex items-center gap-1.5 bg-marigold hover:bg-marigold-hover active:bg-marigold-active text-ink font-sans text-sm font-semibold px-5 py-2.5 rounded-btn transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2"
+            >
+              <PlusIcon width={16} height={16} />
+              <span>Add page</span>
+            </Link>
+          }
+        />
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
+      {toastMessage && (
+        <div
+          role="status"
+          className="bg-panel border border-rule text-ink px-4 py-2.5 rounded-card shadow-xs flex items-center gap-2 text-sm font-medium"
+        >
+          <CheckIcon width={16} height={16} className="text-success flex-shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-rule pb-4 flex items-baseline justify-between gap-4">
         <div>
@@ -256,47 +372,72 @@ export default function LibraryPage() {
             page.status !== 'done' && page.status !== 'error';
 
           return (
-            <Link
-              key={page.id}
-              to={`/pages/${page.id}`}
-              className="bg-panel border border-rule hover:border-marigold rounded-panel p-4 flex flex-col justify-between transition-colors group cursor-pointer"
-            >
-              <div>
-                {/* Thumbnail */}
-                <div className="w-full relative mb-3">
-                  {page.thumbnail_url ? (
-                    <img
-                      src={page.thumbnail_url}
-                      alt={page.title}
-                      className="w-full aspect-[3/4] object-cover rounded-sm border border-rule"
-                    />
-                  ) : (
-                    <PaperThumb />
-                  )}
+            <div key={page.id} className="relative group">
+              <Link
+                to={`/pages/${page.id}`}
+                className="bg-panel border border-rule hover:border-marigold rounded-panel p-4 flex flex-col justify-between transition-colors h-full cursor-pointer"
+              >
+                <div>
+                  {/* Thumbnail */}
+                  <div className="w-full relative mb-3">
+                    {page.thumbnail_url ? (
+                      <img
+                        src={page.thumbnail_url}
+                        alt={page.title}
+                        className="w-full aspect-[3/4] object-cover rounded-sm border border-rule"
+                      />
+                    ) : (
+                      <PaperThumb />
+                    )}
 
-                  {/* Thin marigold progress bar for in-progress cards */}
-                  {isInProgress && (
-                    <div className="w-full h-1 bg-rule rounded-full overflow-hidden mt-2">
-                      <div className="h-full bg-marigold animate-pulse w-3/4 rounded-full" />
-                    </div>
-                  )}
+                    {/* Thin marigold progress bar for in-progress cards */}
+                    {isInProgress && (
+                      <div className="w-full h-1 bg-rule rounded-full overflow-hidden mt-2">
+                        <div className="h-full bg-marigold animate-pulse w-3/4 rounded-full" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title */}
+                  <h2 className="font-serif text-lg font-semibold text-ink group-hover:text-black leading-snug line-clamp-2">
+                    {page.title}
+                  </h2>
                 </div>
 
-                {/* Title */}
-                <h2 className="font-serif text-lg font-semibold text-ink group-hover:text-black leading-snug line-clamp-2">
-                  {page.title}
-                </h2>
-              </div>
+                {/* Footer */}
+                <div className="flex items-center justify-between text-xs text-muted pt-3 border-t border-rule/50 mt-3">
+                  <span>{formatShortDate(page.added_at)}</span>
+                  <StatusPill status={page.status} />
+                </div>
+              </Link>
 
-              {/* Footer */}
-              <div className="flex items-center justify-between text-xs text-muted pt-3 border-t border-rule/50 mt-3">
-                <span>{formatShortDate(page.added_at)}</span>
-                <StatusPill status={page.status} />
-              </div>
-            </Link>
+              {/* Trash icon button */}
+              <button
+                type="button"
+                aria-label="Delete page"
+                disabled={isInProgress}
+                title={isInProgress ? 'Wait until this page has finished processing' : 'Delete page'}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDeletingPage(page);
+                }}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-panel/90 border border-rule/70 text-muted hover:text-danger hover:bg-panel active:bg-tint/40 shadow-xs transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 disabled:opacity-30 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 z-10"
+              >
+                <TrashIcon width={14} height={14} />
+              </button>
+            </div>
           );
         })}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deletingPage}
+        isDeleting={isDeleting}
+        errorMessage={deleteError}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 }

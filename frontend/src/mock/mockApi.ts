@@ -523,3 +523,26 @@ export async function refreshPage(id: number | string): Promise<Page> {
 
   return JSON.parse(JSON.stringify(page));
 }
+
+
+export async function deletePage(id: number | string): Promise<{ ok: boolean }> {
+  await randomDelay();
+  const numId = typeof id === 'string' ? parseInt(id, 10) : id;
+  const pages = loadPagesFromStorage();
+  const pageIndex = pages.findIndex((p) => p.id === numId);
+
+  if (pageIndex === -1) {
+    throw new ApiError('unknown', 'Page not found');
+  }
+
+  const page = pages[pageIndex];
+  advancePageProgress(page);
+
+  if (page.status !== 'done' && page.status !== 'error') {
+    throw new ApiError('unknown', 'Page is still being processed');
+  }
+
+  pages.splice(pageIndex, 1);
+  savePagesToStorage(pages);
+  return { ok: true };
+}

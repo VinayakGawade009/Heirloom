@@ -27,6 +27,12 @@ async function handleResponse<T>(res: Response): Promise<T> {
         } else if (typeof data.error === 'string') {
           errorMessage = data.error;
         }
+      } else if (data && data.detail) {
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        } else {
+          errorMessage = JSON.stringify(data.detail);
+        }
       }
     } catch {
       // Body is not JSON
@@ -192,6 +198,24 @@ export async function refreshPage(id: number | string): Promise<Page> {
     throw new ApiError(
       'unknown',
       (err as Error).message || 'Failed to refresh page'
+    );
+  }
+}
+
+export async function deletePage(id: number | string): Promise<{ ok: boolean }> {
+  if (USE_MOCK) {
+    return mock.deletePage(id);
+  }
+  try {
+    const res = await fetch(`/api/pages/${id}`, {
+      method: 'DELETE',
+    });
+    return await handleResponse<{ ok: boolean }>(res);
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(
+      'unknown',
+      (err as Error).message || `Failed to delete page #${id}`
     );
   }
 }

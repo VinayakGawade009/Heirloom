@@ -5,7 +5,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -97,6 +97,17 @@ def add_page(
 @app.get("/api/pages/{page_id}")
 def get_page(page_id: int):
     return service.get_page(page_id)
+
+
+@app.delete("/api/pages/{page_id}")
+def delete_page(page_id: int):
+    try:
+        return service.delete_page(page_id)
+    except service.PageNotFoundError:
+        raise HTTPException(status_code=404, detail="Page not found")
+    except service.PageBusyError:
+        raise HTTPException(status_code=409, detail="Page is still being processed")
+
 
 
 @app.post("/api/pages/{page_id}/corrections")

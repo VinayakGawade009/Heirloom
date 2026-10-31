@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { usePagePolling } from '../hooks/usePagePolling';
-import { refreshPage, getPage, ApiError } from '../api';
+import { refreshPage, getPage, deletePage, ApiError } from '../api';
 import type { Page, PageStatus } from '../types';
 import ErrorCard from '../components/ErrorCard';
 import ImageStage from '../components/ImageStage';
@@ -9,6 +9,8 @@ import TranscriptText from '../components/TranscriptText';
 import TranslationPanel from '../components/TranslationPanel';
 import FactsPanel from '../components/FactsPanel';
 import RefreshBanner from '../components/RefreshBanner';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { TrashIcon } from '../components/icons';
 
 type TabId = 'transcript' | 'translation' | 'facts';
 
@@ -111,12 +113,18 @@ function isProcessing(status: PageStatus): boolean {
 export default function PageView() {
   const { id } = useParams<{ id: string }>();
   const numericId = id ? parseInt(id, 10) : NaN;
+  const navigate = useNavigate();
   const { page, loading, error, setPage, reload } = usePagePolling(numericId);
 
   const [activeTab, setActiveTab] = useState<TabId>('transcript');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<ApiError | null>(null);
   const refreshPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Deletion state
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Highlight span for facts -> transcript cross-referencing
   const [highlightSpan, setHighlightSpan] = useState<{ start: number; end: number } | null>(null);
@@ -256,12 +264,42 @@ export default function PageView() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [clearHighlight]);
 
+  const handleConfirmDelete = async () => {
+    if (!page || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deletePage(page.id);
+      try {
+        localStorage.removeItem(STALE_KEY_PREFIX + page.id);
+      } catch {
+        // ignore
+      }
+      setIsDeleting(false);
+      setIsConfirmOpen(false);
+      navigate('/');
+    } catch (err) {
+      setIsDeleting(false);
+      if (err instanceof ApiError) {
+        setDeleteError(err.message);
+      } else {
+        setDeleteError((err as Error).message || 'Failed to delete page.');
+      }
+    }
+  };
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return;
+    setIsConfirmOpen(false);
+    setDeleteError(null);
+  };
+
   // --- Render states ---
   if (isNaN(numericId)) {
     return (
       <div className="flex flex-col gap-6 py-4 max-w-2xl mx-auto">
         <ErrorCard code="unknown" message="Page not found." />
-        <Link to="/" className="text-sm font-medium text-muted hover:text-ink transition-colors">
+        <Link to="/" className="text-sm font-medium text-muted hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 rounded-sm">
           ← Back to library
         </Link>
       </div>
@@ -288,7 +326,7 @@ export default function PageView() {
           message={isNotFound ? 'Page not found.' : error.message}
           onRetry={reload}
         />
-        <Link to="/" className="text-sm font-medium text-muted hover:text-ink transition-colors">
+        <Link to="/" className="text-sm font-medium text-muted hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 rounded-sm">
           ← Back to library
         </Link>
       </div>
@@ -322,16 +360,28 @@ export default function PageView() {
         <div className="flex items-center gap-2 min-w-0">
           <Link
             to="/"
-            className="text-sm font-medium text-muted hover:text-ink transition-colors whitespace-nowrap"
+            className="text-sm font-medium text-muted hover:text-ink transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 rounded-sm"
           >
             ← Archive
           </Link>
           <span className="text-sm text-muted">/</span>
           <h1 className="font-serif text-lg font-bold text-ink truncate">{page.title}</h1>
         </div>
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-inset border border-rule font-mono text-xs text-muted whitespace-nowrap">
-          Read with {page.model}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-inset border border-rule font-mono text-xs text-muted whitespace-nowrap">
+            Read with {page.model}
+          </span>
+          <button
+            type="button"
+            disabled={processing}
+            title={processing ? 'Wait until this page has finished processing' : 'Delete page'}
+            onClick={() => setIsConfirmOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#B23A2B] bg-panel border border-rule rounded-btn hover:bg-danger/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2"
+          >
+            <TrashIcon width={13} height={13} />
+            <span>Delete page</span>
+          </button>
+        </div>
       </div>
 
       {/* Error state */}
@@ -375,26 +425,23 @@ export default function PageView() {
                       key={tab.id}
                       type="button"
                       onClick={() => {
+                        clearHighlight();
                         setActiveTab(tab.id);
-                        if (tab.id !== 'transcript') {
-                          clearHighlight();
-                        }
                       }}
-                      className={`inline-flex items-center gap-1.5 px-4 py-3 font-sans text-sm font-medium cursor-pointer transition-colors whitespace-nowrap border-b-2 -mb-px ${
+                      className={`relative py-3 px-4 text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-marigold focus-visible:ring-offset-2 rounded-t-sm ${
                         isActive
-                          ? 'text-ink border-marigold'
-                          : 'text-muted hover:text-ink border-transparent'
+                          ? 'text-ink'
+                          : 'text-muted hover:text-ink'
                       }`}
                     >
                       <span>{tab.label}</span>
                       {tab.badge && (
-                        <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-semibold ${
-                          isActive
-                            ? 'bg-marigold/20 text-ink'
-                            : 'bg-inset text-muted'
-                        }`}>
+                        <span className="bg-inset text-muted border border-rule rounded-chip text-xs px-2 py-0.5 font-sans font-medium">
                           {tab.badge}
                         </span>
+                      )}
+                      {isActive && (
+                        <span className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-marigold z-10" />
                       )}
                     </button>
                   );
@@ -439,6 +486,14 @@ export default function PageView() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={isConfirmOpen}
+        isDeleting={isDeleting}
+        errorMessage={deleteError}
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
+      />
     </div>
   );
 }
