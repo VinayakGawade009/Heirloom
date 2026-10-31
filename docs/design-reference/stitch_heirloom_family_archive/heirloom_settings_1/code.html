@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heirloom - Settings</title>
+  <style>
+    :root {
+      --bg: #FBF6EC;
+      --card-bg: #FFFDF8;
+      --border: #E6DAC3;
+      --accent: #E9951C;
+      --accent-tint: #FCE7BD;
+      --ink: #2B2118;
+      --ink-muted: #7A6F62;
+      --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --success: #4F7A3A;
+      --alert-bg: #FDF0ED;
+      --alert-border: #B23A2B;
+      --alert-text: #962B1D;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Shared Top Bar */
+    header {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .brand-title {
+      font-family: var(--font-serif);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .search-container {
+      flex: 1;
+      max-width: 580px;
+      position: relative;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink-muted);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 16px 10px 42px;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      color: var(--ink);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      outline: none;
+    }
+
+    .search-input::placeholder {
+      color: var(--ink-muted);
+    }
+
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .btn-add {
+      background: var(--accent);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 9999px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    .btn-add:hover {
+      opacity: 0.94;
+    }
+
+    .nav-link {
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+      text-decoration: none;
+      padding: 6px 0;
+      position: relative;
+    }
+
+    .nav-link:hover {
+      color: #000000;
+    }
+
+    .nav-link.active {
+      font-weight: 600;
+      box-shadow: 0 2px 0 0 var(--accent);
+    }
+
+    /* Main Content Container */
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 32px 64px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .page-header {
+      margin-bottom: 8px;
+    }
+
+    .page-title {
+      font-family: var(--font-serif);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      font-size: 16px;
+      color: var(--ink-muted);
+      line-height: 1.5;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .card-title {
+      font-family: var(--font-serif);
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Native Select Dropdowns */
+    .select-input {
+      width: 100%;
+      padding: 10px 14px;
+      font-family: var(--font-sans);
+      font-size: 15px;
+      color: var(--ink);
+      background-color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .select-input:focus {
+      border-color: var(--accent);
+    }
+
+    .help-text {
+      font-size: 14px;
+      color: var(--ink-muted);
+      line-height: 1.5;
+    }
+
+    /* Status Rows */
+    .status-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #F1E7D4;
+      font-size: 15px;
+    }
+
+    .status-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .status-row:first-child {
+      padding-top: 0;
+    }
+
+    .status-label {
+      color: var(--ink-muted);
+      font-weight: 500;
+    }
+
+    .status-value {
+      color: var(--ink);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-running {
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    /* Problem / Error Card */
+    .problem-card {
+      background: var(--alert-bg);
+      border: 1px solid var(--alert-border);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .problem-title {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--alert-text);
+      line-height: 1.4;
+    }
+
+    .code-box {
+      background: #201A15;
+      color: #FBF6EC;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .code-text {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+      overflow-x: auto;
+    }
+
+    .btn-copy {
+      background: rgba(255, 255, 255, 0.12);
+      color: #FBF6EC;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 5px 12px;
+      cursor: pointer;
+    }
+
+    .btn-copy:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Actions */
+    .actions-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .button-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn-save {
+      background: var(--accent);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    .btn-save:hover {
+      opacity: 0.94;
+    }
+
+    .link-discard {
+      color: var(--ink-muted);
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .link-discard:hover {
+      color: var(--ink);
+      text-decoration: underline;
+    }
+
+    .note-text {
+      font-size: 14px;
+      color: var(--ink-muted);
+      line-height: 1.5;
+    }
+
+    /* Shared Bottom Bar */
+    footer {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+
+    .footer-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .footer-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      background-color: var(--success);
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Shared Top Bar -->
+  <header>
+    <a href="#" class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+        <line x1="8" y1="6" x2="16" y2="6"></line>
+        <line x1="8" y1="10" x2="14" y2="10"></line>
+      </svg>
+      <span class="brand-title">Heirloom</span>
+    </a>
+
+    <div class="search-container">
+      <span class="search-icon">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </span>
+      <input type="text" class="search-input" placeholder="Search your archive, e.g. which letters mention the farm?" aria-label="Search your archive">
+    </div>
+
+    <nav class="nav-actions">
+      <a href="#" class="btn-add">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Add page</span>
+      </a>
+      <a href="#" class="nav-link">Library</a>
+      <a href="#" class="nav-link active">Settings</a>
+    </nav>
+  </header>
+
+  <!-- Main Settings Column -->
+  <main>
+    <div class="page-header">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-subtitle">Choose the reading model and the language for translations.</p>
+    </div>
+
+    <!-- Card 1: Reading model -->
+    <section class="card">
+      <h2 class="card-title">Reading model</h2>
+      <div class="form-group">
+        <select class="select-input" aria-label="Reading model">
+          <option value="gemma4:e2b" selected>gemma4:e2b</option>
+          <option value="gemma4:e4b">gemma4:e4b</option>
+        </select>
+        <p class="help-text">Pick a model that fits this laptop. Smaller models are faster, larger ones may read handwriting better. Only models installed on this computer are listed.</p>
+      </div>
+    </section>
+
+    <!-- Card 2: Translate into -->
+    <section class="card">
+      <h2 class="card-title">Translate into</h2>
+      <div class="form-group">
+        <select class="select-input" aria-label="Target translation language">
+          <option value="English" selected>English</option>
+          <option value="Hindi">Hindi</option>
+          <option value="Marathi">Marathi</option>
+          <option value="Spanish">Spanish</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Card 3: Status -->
+    <section class="card">
+      <h2 class="card-title">Status</h2>
+      <div class="status-list">
+        <div class="status-row">
+          <span class="status-label">Local model service</span>
+          <span class="status-value status-running">● Running</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Network</span>
+          <span class="status-value">Not needed</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Archive</span>
+          <span class="status-value">12 pages stored on this computer</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem card -->
+    <section class="problem-card">
+      <div class="problem-title">That model is not installed on this computer.</div>
+      <div class="code-box">
+        <code class="code-text">ollama pull gemma4:e2b</code>
+        <button type="button" class="btn-copy">Copy</button>
+      </div>
+    </section>
+
+    <!-- Actions & Guidance -->
+    <section class="actions-section">
+      <div class="button-group">
+        <button type="button" class="btn-save">Save settings</button>
+        <a href="#" class="link-discard">Discard changes</a>
+      </div>
+      <p class="note-text">Changing the model only affects pages you add afterwards.</p>
+    </section>
+  </main>
+
+  <!-- Shared Bottom Bar -->
+  <footer>
+    <div class="footer-status">
+      <span class="footer-dot"></span>
+      <span>Running on this computer. No internet needed.</span>
+    </div>
+    <div class="footer-model">
+      Model: gemma4:e2b
+    </div>
+  </footer>
+
+</body>
+</html>
